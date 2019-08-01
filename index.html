@@ -1,0 +1,108 @@
+<!-- 
+
+  Adapted from Mike Bostock at bl.ocks.org
+  https://bl.ocks.org/mbostock/3885211
+
+ -->
+
+<!DOCTYPE html>
+<head>
+    <meta charset="utf-8">
+    <meta name="description" content="">
+    <title>7.5 - Stacked area charts</title>
+    <!-- Bootstrap Core CSS -->
+    <link rel="stylesheet" href="css/bootstrap.min.css">
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+
+    <nav class="navbar navbar-default"></nav>
+    <svg width="600" height="400"></svg>
+
+<script src="https://d3js.org/d3.v4.min.js"></script>
+
+<script>
+
+    var svg = d3.select("svg"),
+        margin = {top: 20, right: 20, bottom: 30, left: 50},
+        width = svg.attr("width") - margin.left - margin.right,
+        height = svg.attr("height") - margin.top - margin.bottom;
+
+    var parseDate = d3.timeParse("%Y %b %d");
+
+    var x = d3.scaleTime().range([0, width]),
+        y = d3.scaleLinear().range([height, 0]),
+        z = d3.scaleOrdinal(d3.schemeCategory20);
+
+    var stack = d3.stack();     // <- Expects input data in specific format
+                                // https://github.com/d3/d3-shape/blob/master/README.md#stacks
+
+    var area = d3.area()        // PATH GENERATOR (we'll get these values using stack layout)
+        .x(function(d) { return x(d.data.date); })    // sets date for each row through the data field
+        .y0(function(d) { return y(d[0]); })
+        .y1(function(d) { return y(d[1]); });
+
+    var g = svg.append("g")
+        .attr("transform", "translate(" + margin.left + "," + margin.top + ")");
+
+    d3.tsv("data/stacked_area1.tsv", type, function(error, data) {
+        if (error) throw error; //  ^ TYPE is function at bottom of file
+                                // Transforming every data point in our array
+
+        var keys = data.columns.slice(1);   // get column headers from data ".slice(1)" is removing "date" from the headers
+
+        x.domain(d3.extent(data, function(d) { return d.date; }));
+        // Y DOMAIN DEFAULTS BETWEEN 0 AND 1, since y axis is 0-100% we don't need to set the domain
+        z.domain(keys);   // browser names as domain for the color scale
+        stack.keys(keys);   //adds the keys to our stack
+
+        console.log(data)
+        console.log(stack(data))
+
+        var layer = g.selectAll(".layer")
+            .data(stack(data))      // data join on the stack of our data (turning data into stack of 8 browsers)
+                                      // updating: our selection will match these groups and update instead of adding new
+            .enter().append("g")      // append one layer for each of them
+            .attr("class", "layer");    
+
+        layer.append("path")        // attach a path for each group
+            .attr("class", "area")
+            .style("fill", function(d) { return z(d.key); })    // ordinal scale determines color
+            .attr("d", area);   //  pass 'd' to area generator
+                                // area generator is creating lower/upper values from each part of our stack()
+                                    // across all of the points in our data set
+
+        // Only label the layers left at the end (if one browser disappears)
+        // Add text labels to chart (A legend is a better idea)
+        layer.filter(function(d) { return d[d.length - 1][1] - d[d.length - 1][0] > 0.01; })
+            .append("text")
+            .attr("x", width - 6)
+            .attr("y", function(d) { return y((d[d.length - 1][0] + d[d.length - 1][1]) / 2); })
+            .attr("dy", ".35em")
+            .style("font", "10px sans-serif")
+            .style("text-anchor", "end")
+            .text(function(d) { return d.key; });
+        
+        // Add axes
+        
+        g.append("g")
+            .attr("class", "axis axis--x")
+            .attr("transform", "translate(0," + height + ")")
+            .call(d3.axisBottom(x));
+
+        g.append("g")
+            .attr("class", "axis axis--y")
+            .call(d3.axisLeft(y).ticks(10, "%"));
+    });
+
+    function type(d, i, columns) {
+        d.date = parseDate(d.date);   // convert date strings into JavaScript date objects
+        for (var i = 1, n = columns.length; i < n; ++i) d[columns[i]] = d[columns[i]] / 100;
+        return d;       // ^dividing our objects' values by 100 so we have them as a percentage
+    }
+
+</script>
+
+</body>
